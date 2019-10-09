@@ -1,0 +1,30 @@
+{
+  "name": "fcooapi",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/app.js",
+  "scripts": {
+    "build": "tsc",
+    "compile": "tsc && node dist/app.js",
+    "dev": "./node_modules/nodemon/bin/nodemon.js -e ts  --exec \"npm run compile\""
+  },
+  "author": "jonas",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/assert": "^1.4.3",
+    "@types/body-parser": "^1.17.1",
+    "@types/express": "^4.17.1",
+    "@types/mongodb": "^3.3.2",
+    "@types/node": "^12.7.12",
+    "nodemon": "^1.19.2",
+    "tslint": "^5.20.0",
+    "typescript": "^3.6.3"
+  },
+  "dependencies": {
+    "assert": "^2.0.0",
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
+    "mongodb": "^3.3.2",
+    "netcdfjs": "^1.0.0"
+  }
+}
