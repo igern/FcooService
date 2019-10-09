@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "compile": "tsc && node dist/app.js",
-    "dev": "./node_modules/nodemon/bin/nodemon.js -e ts  --exec \"npm run compile\""
+    "dev": "node ./node_modules/nodemon/bin/nodemon.js -e ts  --exec \"npm run compile\""
   },
   "author": "jonas",
   "license": "ISC",
