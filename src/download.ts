@@ -1,132 +1,175 @@
 const fs = require("fs");
 const NetCDFReader = require("netcdfjs");
 import cluster from 'cluster'
-import { cpus } from 'os'
+import os from 'os'
 import http from 'http'
 import {MongoClient, Db} from 'mongodb'
 import assert from 'assert'
 
-const numCPUs: number = cpus().length;
-// Database
-const dbUrl = "mongodb://localhost:27017";
-const dbName = "fcoodb";
-const client = new MongoClient(dbUrl, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
-// Data configs
-const dataUrl =
-  "http://wms.fcoo.dk/webmap/FCOO/GETM/idk-600m_3D-velocities_surface_1h.DK600-v007C.nc";
-const dest = "data.nc";
+const numCPUs = os.cpus().length;
+
+if ( cluster.isMaster) {
+  masterProcess()
+} else {
+  childProcess();
+}
 
 
-
-const download = async function(url, dest, cb) {
-  var file = fs.createWriteStream(dest);
-  var request = http.get(url, function(response) {
-    response.pipe(file);
-    file.on("finish", function() {
-      file.close(cb);
-    });
+function masterProcess() {
+  console.time("executiontime")
+    // Database
+  const dbUrl = "mongodb://localhost:27017";
+  const dbName = "fcoodb";
+  const client = new MongoClient(dbUrl, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
   });
-};
+  // Data configs
+  const dataUrl =
+    "http://wms.fcoo.dk/webmap/FCOO/GETM/idk-600m_3D-velocities_surface_1h.DK600-v007C.nc";
+  const dest = "data.nc";
 
-const insertVelocityData = async function(db: Db, callback: () => void) {
-  console.log("reading data");
-  const data = fs.readFileSync("data.nc");
-  var reader = new NetCDFReader(data); // read the header
-  let date : any = new Date(reader.variables[3].attributes[1].value)
-  let timestamp = Math.floor(date / 1000);
-
-  // remove all collections that will be overwritten.
-
-  let newCollectionNames: string[] = [];
-  for(const time of reader.getDataVariable("time")) {
-    newCollectionNames.push(`${timestamp + time}`)
+  var download = async function(url: string, dest: string, cb: () => void) {
+    let file = fs.createWriteStream(dest);
+    var request = http.get(url, function(response) {
+      response.pipe(file);
+      file.on("finish", function() {
+        file.close(cb);
+      });
+    });
+    cb();
   }
 
-  await db.collections().then(async (collections) => {
-    for (const collection of collections) {
-      if(newCollectionNames.includes(collection.collectionName)) {
-        db.dropCollection(collection.collectionName)
-        console.log(`dropped collection: ${collection.collectionName}`);
-      }
+  const clearOverlappingCollections = async (db: Db, reader: any, timestamp: number) => {
+
+    let newCollectionNames: string[] = [];
+    for(const time of reader.getDataVariable("time")) {
+      newCollectionNames.push(`${timestamp + time}`)
     }
-  });
-  for (const time of reader.getDataVariable("time")) {
-    await newFunction(timestamp, time, db, reader);
-  }
-  callback();
-};
 
-const calculateMagnitude = (x, y) => {
-  return Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2));
-};
-
-const calculateDirection = (x, y) => {
-  let degrees = Math.atan(x / y) * (Math.PI / 180);
-  if (x > 0 && y < 0) {
-    degrees += 180;
-  } else if (x < 0 && y < 0) {
-    degrees = Math.abs(degrees) + 180;
-  } else if (x < 0 && y > 0) {
-    degrees += 360;
-  } else {
-    degrees = Math.abs(degrees);
-  }
-  return degrees;
-};
-
-download(dataUrl, dest, () => {
-  console.log("Done downloading data");
-  client.connect(function(err) {
-    assert.equal(null, err);
-    console.log("Connected successfully to server");
-  
-    const db: Db = client.db(dbName);
-  
-    insertVelocityData(db, function() {
-      client.close();
+    await db.collections().then(async (collections) => {
+      for (const collection of collections) {
+        if(newCollectionNames.includes(collection.collectionName)) {
+          db.dropCollection(collection.collectionName)
+        }
+      }
     });
-  });
-})
+  }
 
-async function newFunction(timestamp: number, time: any, db: Db, reader: any) {
-  let collectionName = `${timestamp + time}`;
-  let documents = [];
-  let collection = db.collection(collectionName);
-  console.log(`Creating collection with name: ${collectionName}`);
-  collection.createIndex({ location: "2dsphere" });
-  let dataChunkUU = reader.getDataVariable("uu")[time / 3600];
-  let dataChunkVV = reader.getDataVariable("vv")[time / 3600];
-  let index = 0;
-  for (let lat = 0; lat < reader.getDataVariable("latc").length; lat++) {
-    for (let lon = 0; lon < reader.getDataVariable("lonc").length; lon++) {
-      let xVel = dataChunkUU[index];
-      let yVel = dataChunkVV[index];
-      if (xVel > -1000 && yVel > -1000) {
-        let mag = calculateMagnitude(xVel, yVel);
-        let dir = calculateDirection(xVel, yVel);
-        documents.push({
-          xVelocity: xVel,
-          yVelocity: yVel,
-          magnitude: mag,
-          direction: dir,
-          location: {
-            type: "Point",
-            coordinates: [
-              reader.getDataVariable("latc")[lat],
-              reader.getDataVariable("lonc")[lon]
-            ]
+
+  download(dataUrl, dest, () => {
+    client.connect(async (err) => {
+      assert.equal(null, err);
+      const db: Db = client.db(dbName);
+
+      const data = fs.readFileSync("data.nc");
+      const reader = new NetCDFReader(data); // read the header
+      const lat = reader.getDataVariable("latc")
+      const lon = reader.getDataVariable("lonc")
+      let date : any = new Date(reader.variables[3].attributes[1].value)
+      let timestamp = Math.floor(date / 1000);
+
+      await clearOverlappingCollections(db, reader, timestamp);
+      let workers: cluster.Worker[] = []
+      let remainingWork = reader.getDataVariable("time")
+      let index = 0;
+      let done = remainingWork.length;
+      let amountStored = 0;
+
+      for (let i = 0; i < numCPUs; i++) {
+        const worker = cluster.fork();
+        workers.push(worker);
+
+        worker.on('message', async (message)  => {
+          if(message.result) {
+            let collection = db.collection(message.collectionName);
+            collection.createIndex({ location: "2dsphere" });
+            await collection.insertMany(message.result).then(() => {
+              amountStored++;
+            });
+            if(amountStored >= done) {
+              console.timeEnd('executiontime')
+              process.exit();
+            }
+            if(index < done) {
+              let time = remainingWork[index]
+              let dataChunkUU = reader.getDataVariable("uu")[time / 3600];
+              let dataChunkVV = reader.getDataVariable("vv")[time / 3600];
+              worker.send({cmd: "work", timestamp: timestamp, time: remainingWork[index], data: {uu: dataChunkUU, vv: dataChunkVV, latc: lat, lonc: lon}});
+              index++;
+            }
           }
         });
       }
-      index++;
-    }
-  }
-  console.log("Done with creating documents");
-  await collection.insertMany(documents).then(() => {
-    console.log("Done with inserting documents");
-  });
+
+      workers.forEach(function(worker) {
+        if(index < done){
+          let time = remainingWork[index]
+          let dataChunkUU = reader.getDataVariable("uu")[time / 3600];
+          let dataChunkVV = reader.getDataVariable("vv")[time / 3600];
+          worker.send({cmd: "work", timestamp: timestamp, time: remainingWork[index], data: {uu: dataChunkUU, vv: dataChunkVV, latc: lat, lonc: lon}})
+          index++;
+        }
+      });
+    });
+  })
 }
-  
+
+function childProcess() {
+  const calculateMagnitude = (x: number, y: number) => {
+    return Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2));
+  };
+
+  const calculateDirection = (x: number, y: number) => {
+    let degrees = Math.atan(x / y) * (Math.PI / 180);
+    if (x > 0 && y < 0) {
+      degrees += 180;
+    } else if (x < 0 && y < 0) {
+      degrees = Math.abs(degrees) + 180;
+    } else if (x < 0 && y > 0) {
+      degrees += 360;
+    } else {
+      degrees = Math.abs(degrees);
+    }
+    return degrees;
+  };
+
+  const createCurrentData = (data: any): any[]  => {
+    let documents = [];
+    let index = 0;
+    for (let lat = 0; lat < data.latc.length; lat++) {
+      for (let lon = 0; lon < data.lonc.length; lon++) {
+        let xVel = data.uu[index];
+        let yVel = data.vv[index];
+        if (xVel > -1000 && yVel > -1000) {
+          let mag = calculateMagnitude(xVel, yVel);
+          let dir = calculateDirection(xVel, yVel);
+          documents.push({
+            xVelocity: xVel,
+            yVelocity: yVel,
+            magnitude: mag,
+            direction: dir,
+            location: {
+              type: "Point",
+              coordinates: [
+                data.latc[lat],
+                data.lonc[lon]
+              ]
+            }
+          });
+        }
+        index++;
+      }
+    }
+    return documents;
+  }
+
+  process.on('message', async (message) => {
+    if(message.cmd == "work") {
+      let collectionName = `${message.timestamp + message.time}`
+      let result = createCurrentData(message.data);
+      (<any>process).send({result: result, collectionName: collectionName});
+    }
+  })
+}
+
