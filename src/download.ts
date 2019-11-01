@@ -49,9 +49,10 @@ function masterProcess() {
 
     await db.collections().then(async (collections) => {
       for (const collection of collections) {
-        if(newCollectionNames.includes(collection.collectionName)) {
+        // if(newCollectionNames.includes(collection.collectionName)) {
           db.dropCollection(collection.collectionName)
-        }
+          console.log(collection.collectionName)
+        // }
       }
     });
   }
@@ -121,7 +122,7 @@ function childProcess() {
   };
 
   const calculateDirection = (x: number, y: number) => {
-    let degrees = Math.atan(x / y) * (Math.PI / 180);
+    let degrees = Math.atan(x / y) * 180 / Math.PI;
     if (x > 0 && y < 0) {
       degrees += 180;
     } else if (x < 0 && y < 0) {

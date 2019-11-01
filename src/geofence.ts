@@ -28,10 +28,11 @@ export abstract class Geofence {
         let filteredCollection = collections.map(function (collection) {
             return Number(collection.collectionName)
         }).filter(function (number) {
-            return number > beginTime && number < endTime
+            return number >= beginTime && number <= endTime
         }).map(function (filteredValue) {
             return filteredValue.toString()
         })
+        console.log(filteredCollection)
         return filteredCollection
     }
 }
@@ -43,6 +44,7 @@ export class PolygonalGeofence extends Geofence {
     }
     makeRequest(db: Db, collectionName: string, vertices): Promise<Object> {
 
+        console.log(vertices)
         return new Promise((resolve, reject) => {
             db.collection(collectionName).find({
                 location: {
@@ -51,7 +53,6 @@ export class PolygonalGeofence extends Geofence {
                     }
                 }
             }).toArray(function (err, docs) {
-                assert.equal(err, null);
                 resolve({
                     timestamp: collectionName,
                     data: docs

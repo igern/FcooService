@@ -1,6 +1,7 @@
 import assert = require("assert");
 import bodyparser from "body-parser";
 import express from "express";
+import cors from 'cors'
 import { MongoClient } from "mongodb";
 import { PolygonalGeofence } from "./geofence";
 import { LatLon } from "./latlon";
@@ -13,6 +14,7 @@ const client = new MongoClient(dbUrl, {
 });
 
 const app = express();
+app.use(cors())
 app.use(bodyparser.urlencoded({ extended: false }));
 app.use(bodyparser.json());
 
