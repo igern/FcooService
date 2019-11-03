@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "download": "node dist/download.js",
+    "clearDb": "node dist/clearDb.js",
     "compile": "tsc && node dist/app.js",
     "dev": "node ./node_modules/nodemon/bin/nodemon.js -e ts  --exec \"npm run compile\""
   },
