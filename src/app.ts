@@ -2,17 +2,17 @@ import assert = require("assert");
 import bodyparser from "body-parser";
 import express from "express";
 import cors from 'cors'
+import cluster from 'cluster'
 import { MongoClient } from "mongodb";
 import { PolygonalGeofence } from "./geofence";
 import { LatLon } from "./latlon";
 
-const dbUrl = process.env.databasePath || "mongodb://localhost:27017";
+const dbUrl = process.env.databasePath || "mongodb://mongodb:27017";
 const dbName = process.env.dbName || "fcoodb";
 const client = new MongoClient(dbUrl, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
-
 const app = express();
 app.use(cors())
 app.use(bodyparser.urlencoded({ extended: false }));

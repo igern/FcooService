@@ -32,7 +32,6 @@ export abstract class Geofence {
         }).map(function (filteredValue) {
             return filteredValue.toString()
         })
-        console.log(filteredCollection)
         return filteredCollection
     }
 }
@@ -44,7 +43,6 @@ export class PolygonalGeofence extends Geofence {
     }
     makeRequest(db: Db, collectionName: string, vertices): Promise<Object> {
 
-        console.log(vertices)
         return new Promise((resolve, reject) => {
             db.collection(collectionName).find({
                 location: {

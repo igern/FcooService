@@ -1,0 +1,22 @@
+version: '3'
+services:
+  mongodb:
+    hostname: mongodb
+    image: 'mongo:3.4.1'
+    expose:
+      - "27017"
+    restart: always
+  node-api:
+    image: node:erbium-alpine
+    volumes:
+      - ./:/opt/FcooService/
+    working_dir: /opt/FcooService/
+    command: npm run dev
+    ports: 
+      - 3001:3001
+  node-download:
+    image: node:erbium-alpine
+    volumes:
+      - ./:/opt/FcooService/
+    working_dir: /opt/FcooService/
+    command: npm run download
