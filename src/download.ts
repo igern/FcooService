@@ -9,7 +9,7 @@ import assert from "assert";
 
 async function download() {
   if (cluster.isMaster) {
-    setInterval(masterProcess, 1000*60*24)
+    setInterval(masterProcess, 1000*60*60*24)
     masterProcess();
   } else {
     childProcess();
